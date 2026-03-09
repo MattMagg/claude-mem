@@ -143,13 +143,15 @@ export class TimelineBuilder {
 
     // Header
     if (query && anchorId) {
-      const anchorObs = items.find(
-        item => item.type === 'observation' &&
-          (item.data as ObservationSearchResult).id === anchorId
-      );
-      const anchorTitle = anchorObs
-        ? ((anchorObs.data as ObservationSearchResult).title || 'Untitled')
-        : 'Unknown';
+      // Create lookup map for efficient anchor resolution
+      const obsMap = new Map<number, ObservationSearchResult>();
+      for (const item of items) {
+        if (item.type === 'observation') {
+          obsMap.set((item.data as ObservationSearchResult).id, item.data as ObservationSearchResult);
+        }
+      }
+      const anchorData = obsMap.get(anchorId as number);
+      const anchorTitle = anchorData ? (anchorData.title || 'Untitled') : 'Unknown';
       lines.push(`# Timeline for query: "${query}"`);
       lines.push(`**Anchor:** Observation #${anchorId} - ${anchorTitle}`);
     } else if (anchorId) {
