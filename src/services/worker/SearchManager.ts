@@ -516,8 +516,15 @@ export class SearchManager {
 
     // Header
     if (query) {
-      const anchorObs = filteredItems.find(item => item.type === 'observation' && item.data.id === anchorId);
-      const anchorTitle = anchorObs && anchorObs.type === 'observation' ? ((anchorObs.data as ObservationSearchResult).title || 'Untitled') : 'Unknown';
+      // Create lookup map for efficient anchor resolution
+      const itemMap = new Map<number, ObservationSearchResult>();
+      for (const item of filteredItems) {
+        if (item.type === 'observation') {
+          itemMap.set((item.data as ObservationSearchResult).id, item.data as ObservationSearchResult);
+        }
+      }
+      const anchorData = itemMap.get(anchorId as number);
+      const anchorTitle = anchorData ? (anchorData.title || 'Untitled') : 'Unknown';
       lines.push(`# Timeline for query: "${query}"`);
       lines.push(`**Anchor:** Observation #${anchorId} - ${anchorTitle}`);
     } else {
@@ -759,10 +766,18 @@ export class SearchManager {
       const allIds = new Set<number>();
       [...typeResults, ...conceptResults, ...whatChangedResults].forEach(obs => allIds.add(obs.id));
 
+      // Create lookup maps for efficient deduplication
+      const typeMap = new Map<number, ObservationSearchResult>();
+      for (const obs of typeResults) typeMap.set(obs.id, obs);
+      const conceptMap = new Map<number, ObservationSearchResult>();
+      for (const obs of conceptResults) conceptMap.set(obs.id, obs);
+      const whatChangedMap = new Map<number, ObservationSearchResult>();
+      for (const obs of whatChangedResults) whatChangedMap.set(obs.id, obs);
+
       results = Array.from(allIds).map(id =>
-        typeResults.find(obs => obs.id === id) ||
-        conceptResults.find(obs => obs.id === id) ||
-        whatChangedResults.find(obs => obs.id === id)
+        typeMap.get(id) ||
+        conceptMap.get(id) ||
+        whatChangedMap.get(id)
       ).filter(Boolean) as ObservationSearchResult[];
 
       results.sort((a, b) => b.created_at_epoch - a.created_at_epoch);
