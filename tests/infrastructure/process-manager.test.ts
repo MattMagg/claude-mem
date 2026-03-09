@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { existsSync, readFileSync } from 'fs';
+import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
+import * as fs from 'fs';
 import { homedir } from 'os';
 import path from 'path';
+import { logger } from '../../src/utils/logger.js';
 import {
   writePidFile,
   readPidFile,
@@ -19,16 +20,15 @@ describe('ProcessManager', () => {
 
   beforeEach(() => {
     // Backup existing PID file if present
-    if (existsSync(PID_FILE)) {
-      originalPidContent = readFileSync(PID_FILE, 'utf-8');
+    if (fs.existsSync(PID_FILE)) {
+      originalPidContent = fs.readFileSync(PID_FILE, 'utf-8');
     }
   });
 
   afterEach(() => {
     // Restore original PID file or remove test one
     if (originalPidContent !== null) {
-      const { writeFileSync } = require('fs');
-      writeFileSync(PID_FILE, originalPidContent);
+      fs.writeFileSync(PID_FILE, originalPidContent);
       originalPidContent = null;
     } else {
       removePidFile();
@@ -45,8 +45,8 @@ describe('ProcessManager', () => {
 
       writePidFile(testInfo);
 
-      expect(existsSync(PID_FILE)).toBe(true);
-      const content = JSON.parse(readFileSync(PID_FILE, 'utf-8'));
+      expect(fs.existsSync(PID_FILE)).toBe(true);
+      const content = JSON.parse(fs.readFileSync(PID_FILE, 'utf-8'));
       expect(content.pid).toBe(12345);
       expect(content.port).toBe(37777);
       expect(content.startedAt).toBe(testInfo.startedAt);
@@ -67,7 +67,7 @@ describe('ProcessManager', () => {
       writePidFile(firstInfo);
       writePidFile(secondInfo);
 
-      const content = JSON.parse(readFileSync(PID_FILE, 'utf-8'));
+      const content = JSON.parse(fs.readFileSync(PID_FILE, 'utf-8'));
       expect(content.pid).toBe(22222);
       expect(content.port).toBe(37888);
     });
@@ -100,8 +100,7 @@ describe('ProcessManager', () => {
     });
 
     it('should return null for corrupted JSON', () => {
-      const { writeFileSync } = require('fs');
-      writeFileSync(PID_FILE, 'not valid json {{{');
+      fs.writeFileSync(PID_FILE, 'not valid json {{{');
 
       const result = readPidFile();
 
@@ -117,20 +116,42 @@ describe('ProcessManager', () => {
         startedAt: new Date().toISOString()
       };
       writePidFile(testInfo);
-      expect(existsSync(PID_FILE)).toBe(true);
+      expect(fs.existsSync(PID_FILE)).toBe(true);
 
       removePidFile();
 
-      expect(existsSync(PID_FILE)).toBe(false);
+      expect(fs.existsSync(PID_FILE)).toBe(false);
     });
 
     it('should not throw for missing file', () => {
       // Ensure file doesn't exist
       removePidFile();
-      expect(existsSync(PID_FILE)).toBe(false);
+      expect(fs.existsSync(PID_FILE)).toBe(false);
 
       // Should not throw
       expect(() => removePidFile()).not.toThrow();
+    });
+
+    it('should catch and log error if unlinkSync fails', () => {
+      const error = new Error('Permission denied');
+      const existsSpy = spyOn(fs, 'existsSync').mockReturnValue(true);
+      const unlinkSpy = spyOn(fs, 'unlinkSync').mockImplementation(() => {
+        throw error;
+      });
+      const loggerSpy = spyOn(logger, 'warn').mockImplementation(() => {});
+
+      removePidFile();
+
+      expect(loggerSpy).toHaveBeenCalledWith(
+        'SYSTEM',
+        'Failed to remove PID file',
+        { path: PID_FILE },
+        error
+      );
+
+      existsSpy.mockRestore();
+      unlinkSpy.mockRestore();
+      loggerSpy.mockRestore();
     });
   });
 
