@@ -5,7 +5,7 @@
  */
 
 import express, { Request, Response } from 'express';
-import { readFileSync, existsSync, writeFileSync, readdirSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../../../../utils/logger.js';
 import { SettingsDefaultsManager } from '../../../../shared/SettingsDefaultsManager.js';
